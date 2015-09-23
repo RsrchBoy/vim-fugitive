@@ -119,6 +119,20 @@ augroup END
 
 let s:abstract_prototype = {}
 
+" Check for and fire off a User autocmd
+
+function! s:maybedoau(event) abort
+  if exists('#User#Fugitive' . a:event)
+    try
+      let [save_mls, &modelines] = [&mls, 0]
+      " doautocmd User FugitiveBoot
+      execute 'doautocmd User Fugitive' . a:event
+    finally
+      let &mls = save_mls
+    endtry
+  endif
+endfunction
+
 " Section: Initialization
 
 function! fugitive#is_git_dir(path) abort
@@ -1035,6 +1049,7 @@ function! s:Commit(args, ...) abort
         let command = 'env GIT_EDITOR=false '
       endif
       let command .= repo.git_command('commit').' '.a:args
+      s:maybedoau('CommitPre')
       if &shell =~# 'csh'
         noautocmd silent execute '!('.command.' > '.outfile.') >& '.errorfile
       elseif a:args =~# '\%(^\| \)-\%(-interactive\|p\|-patch\)\>'
@@ -1042,6 +1057,7 @@ function! s:Commit(args, ...) abort
       else
         noautocmd silent execute '!'.command.' > '.outfile.' 2> '.errorfile
       endif
+      s:maybedoau('Commit')
     finally
       execute cd.'`=dir`'
     endtry
@@ -1059,6 +1075,7 @@ function! s:Commit(args, ...) abort
       let errors = readfile(errorfile)
       let error = get(errors,-2,get(errors,-1,'!'))
       if error =~# 'false''\=\.$'
+        s:maybedoau('CommitMsgEditPre')
         let args = a:args
         let args = s:gsub(args,'%(%(^| )-- )@<!%(^| )@<=%(-[esp]|--edit|--interactive|--patch|--signoff)%($| )','')
         let args = s:gsub(args,'%(%(^| )-- )@<!%(^| )@<=%(-c|--reedit-message|--reuse-message|-F|--file|-m|--message)%(\s+|\=)%(''[^'']*''|"%(\\.|[^"])*"|\\.|\S)*','')
@@ -1081,6 +1098,7 @@ function! s:Commit(args, ...) abort
         endif
         let b:fugitive_commit_arguments = args
         setlocal bufhidden=wipe filetype=gitcommit
+        s:maybedoau('CommitMsgEdit')
         return '1'
       elseif error ==# '!'
         return s:Status()
@@ -1113,7 +1131,9 @@ function! s:FinishCommit() abort
   let args = getbufvar(+expand('<abuf>'),'fugitive_commit_arguments')
   if !empty(args)
     call setbufvar(+expand('<abuf>'),'fugitive_commit_arguments','')
+    s:maybedoau('CommitFinishPre')
     return s:Commit(args, s:repo(getbufvar(+expand('<abuf>'),'git_dir')))
+    s:maybedoau('CommitFinish')
   endif
   return ''
 endfunction
