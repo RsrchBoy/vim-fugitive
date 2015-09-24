@@ -490,6 +490,20 @@ endfunction
 
 call s:add_methods('repo',['keywordprg'])
 
+function! s:repo_push(bang, args) dict abort
+  doautocmd User FugitivePushPre
+  s:Dispatch(bang, 'push ' . args)
+  doautocmd User FugitivePush
+endfunction
+
+function! s:repo_fetch(bang, args) dict abort
+  doautocmd User FugitiveFetchPre
+  s:Dispatch(bang, 'fetch ' . args)
+  doautocmd User FugitiveFetch
+endfunction
+
+call s:add_methods('repo',['push','fetch'])
+
 " Section: Buffer
 
 let s:buffer_prototype = {}
@@ -1619,8 +1633,23 @@ augroup END
 
 " Section: Gpush, Gfetch
 
-call s:command("-nargs=? -bang -complete=custom,s:RemoteComplete Gpush  execute s:Dispatch('<bang>', 'push '.<q-args>)")
-call s:command("-nargs=? -bang -complete=custom,s:RemoteComplete Gfetch execute s:Dispatch('<bang>', 'fetch '.<q-args>)")
+call s:command("-nargs=? -bang -complete=custom,s:RemoteComplete Gpush  execute fugitive#repo().push('<bang>', <q-args>)")
+call s:command("-nargs=? -bang -complete=custom,s:RemoteComplete Gfetch execute fugitive#repo().fetch('<bang>', <q-args>)")
+
+"call s:command("-nargs=? -bang -complete=custom,s:RemoteComplete Gpush  execute s:Dispatch('<bang>', 'push '.<q-args>)")
+"call s:command("-nargs=? -bang -complete=custom,s:RemoteComplete Gfetch execute s:Dispatch('<bang>', 'fetch '.<q-args>)")
+
+function! fugitive#push(bang, args)
+  doautocmd User FugitivePushPre
+  s:Dispatch(bang, 'push ' . args)
+  doautocmd User FugitivePush
+endfunction
+
+function! fugitive#fetch(bang, args)
+  doautocmd User FugitiveFetchPre
+  s:Dispatch(bang, 'fetch ' . args)
+  doautocmd User FugitiveFetch
+endfunction
 
 function! s:Dispatch(bang, args)
   let cd = exists('*haslocaldir') && haslocaldir() ? 'lcd' : 'cd'
