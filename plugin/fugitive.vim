@@ -140,12 +140,13 @@ function! fugitive#extract_git_dir(path) abort
   if s:shellslash(a:path) =~# '^fugitive://.*//'
     return matchstr(s:shellslash(a:path), '\C^fugitive://\zs.\{-\}\ze//')
   endif
-  if isdirectory(a:path)
-    let path = fnamemodify(a:path, ':p:s?[\/]$??')
+  let path = resolve(a:path)
+  if isdirectory(path)
+    let path = fnamemodify(path, ':p:s?[\/]$??')
   else
-    let path = fnamemodify(a:path, ':p:h:s?[\/]$??')
+    let path = fnamemodify(path, ':p:h:s?[\/]$??')
   endif
-  let root = s:shellslash(simplify(resolve(path)))
+  let root = s:shellslash(simplify(path))
   let previous = ""
   while root !=# previous
     if root =~# '\v^//%([^/]+/?)?$'
