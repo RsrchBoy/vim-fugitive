@@ -588,7 +588,7 @@ else
 
   function! s:buffer_spec() dict abort
     let bufname = bufname(self['#'])
-    return s:shellslash(bufname == '' ? '' : fnamemodify(bufname,':p'))
+    return s:shellslash(bufname == '' ? '' : fnamemodify(simplify(resolve(bufname)),':p'))
   endfunction
 
 endif
