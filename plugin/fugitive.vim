@@ -588,6 +588,9 @@ else
 
   function! s:buffer_spec() dict abort
     let bufname = bufname(self['#'])
+    if l:bufname !~# '^fugitive://'
+        let l:bufname = simplify(resolve(l:bufname))
+    endif
     return s:shellslash(bufname == '' ? '' : fnamemodify(bufname,':p'))
   endfunction
 
