@@ -609,6 +609,7 @@ function! s:cpath(path) abort
   endif
 endfunction
 
+" path internal to the worktree
 function! s:buffer_path(...) dict abort
   let rev = matchstr(self.spec(),'^fugitive://.\{-\}//\zs.*')
   if rev != ''

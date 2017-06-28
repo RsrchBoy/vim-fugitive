@@ -1,0 +1,37 @@
+#!/usr/bin/env perl
+#
+# Run this as 'funcs plugin/fugitive.vim', or by piping it in.  Either way
+# works.
+#
+# Chris Weyl <cweyl@alumni.drew.edu> 2017
+
+use v5.10;
+use strict;
+use warnings;
+
+my %object = (
+    repo   => 'fugutive#repo().',
+    buffer => 'fugutive#buffer().',
+);
+
+my @funcs;
+
+# yes, I have deliberately chosen to exemplify a number of Perl Worst
+# Practices in the following block, as an intellectual exercise.
+#
+# So there.
+while (<>) {
+
+    chomp;
+    push @funcs,
+          /^function! (?<func>fugitive#.*)$/                 ? $+{func}
+        : /^function! s:(?<type>(repo|buffer))_(?<func>.+)$/ ? "$object{$+{type}}$+{func}"
+        :                                                      next
+        ;
+
+}
+
+say for sort @funcs;
+
+# not strictly necessary, but traditional
+!!42;
