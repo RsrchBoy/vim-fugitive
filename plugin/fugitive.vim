@@ -726,7 +726,7 @@ function! s:Git(bang, args) abort
     let git .= ' --no-pager'
   endif
   let args = matchstr(a:args,'\v\C.{-}%($|\\@<!%(\\\\)*\|)@=')
-  if exists(':terminal')
+  if exists(':terminal') && has('nvim')
     let dir = s:repo().tree()
     if expand('%') != ''
       -tabedit %
