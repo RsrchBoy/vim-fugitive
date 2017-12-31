@@ -154,12 +154,13 @@ function! fugitive#extract_git_dir(path) abort
   if s:shellslash(a:path) =~# '^fugitive://.*//'
     return matchstr(s:shellslash(a:path), '\C^fugitive://\zs.\{-\}\ze//')
   endif
-  if isdirectory(a:path)
-    let path = fnamemodify(a:path, ':p:s?[\/]$??')
+  let l:path = simplify(resolve(a:path))
+  if isdirectory(l:path)
+    let l:path = fnamemodify(l:path, ':p:s?[\/]$??')
   else
-    let path = fnamemodify(a:path, ':p:h:s?[\/]$??')
+    let l:path = fnamemodify(l:path, ':p:h:s?[\/]$??')
   endif
-  let root = s:shellslash(resolve(path))
+  let root = s:shellslash(l:path)
   let previous = ""
   while root !=# previous
     if root =~# '\v^//%([^/]+/?)?$'
@@ -303,6 +304,7 @@ function! s:configured_tree(git_dir) abort
     elseif filereadable(a:git_dir . '/gitdir')
       let worktree = fnamemodify(readfile(a:git_dir . '/gitdir')[0], ':h')
       if worktree ==# '.'
+        echo "Found a broken worktree. Please fix ".readfile(a:git_dir)."/gitdir to contain an absolute path to the worktree's .git file."
         unlet! worktree
       endif
     endif
@@ -330,7 +332,7 @@ function! s:repo_tree(...) dict abort
   if dir ==# ''
     call s:throw('no work tree')
   else
-    return join([dir]+a:000,'/')
+    return join([resolve(dir)]+a:000,'/')
   endif
 endfunction
 
@@ -601,6 +603,9 @@ else
 
   function! s:buffer_spec() dict abort
     let bufname = bufname(self['#'])
+    if l:bufname !~# '^fugitive://'
+        let l:bufname = simplify(resolve(l:bufname))
+    endif
     return s:shellslash(bufname == '' ? '' : fnamemodify(bufname,':p'))
   endfunction
 
@@ -740,15 +745,19 @@ function! s:Git(bang, args) abort
     let git .= ' --no-pager'
   endif
   let args = matchstr(a:args,'\v\C.{-}%($|\\@<!%(\\\\)*\|)@=')
-  if exists(':terminal') && has('nvim')
+  if (exists(':terminal') && has('nvim')) || has('terminal')
     let dir = s:repo().tree()
-    if expand('%') != ''
-      -tabedit %
-    else
-      -tabnew
-    endif
     execute 'lcd' fnameescape(dir)
-    execute 'terminal' git args
+    if expand('%') != ''
+        -tabedit %
+    else
+        -tabnew
+    endif
+    if has('nvim')
+        execute 'terminal' git args
+    else
+        execute 'terminal ++curwin ++close' git args
+    endif
   else
     call s:ExecuteInTree('!'.git.' '.args)
     if has('win32')
