@@ -2724,7 +2724,12 @@ function! s:BufReadObject() abort
     let b:git_dir = s:repo().dir()
     let hash = s:buffer().sha1()
     if !exists("b:fugitive_type")
-      let b:fugitive_type = s:repo().git_chomp('cat-file','-t',hash)
+      try
+        let b:fugitive_type = ducttape#git#type_of(l:hash)
+      catch
+        call s:dtCatch(l:hash)
+        let b:fugitive_type = s:repo().git_chomp('cat-file','-t',hash)
+      endtry
     endif
     if b:fugitive_type !~# '^\%(tag\|commit\|tree\|blob\)$'
       return "echoerr ".string("fugitive: unrecognized git type '".b:fugitive_type."'")
