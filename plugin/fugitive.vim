@@ -508,7 +508,12 @@ endfunction
 call s:add_methods('repo',['dirglob','superglob'])
 
 function! s:repo_config(conf) dict abort
-  return matchstr(s:repo().git_chomp('config',a:conf),"[^\r\n]*")
+  try
+    return matchstr(ducttape#git#config(a:conf),"[^\r\n]*")
+  catch
+    call s:dtCatch(a:conf)
+    return matchstr(s:repo().git_chomp('config',a:conf),"[^\r\n]*")
+  endtry
 endfun
 
 function! s:repo_user() dict abort
