@@ -68,6 +68,10 @@ function! s:shellslash(path) abort
   endif
 endfunction
 
+function! s:dtCatch(prepend) abort
+  echoerr a:prepend . ' / ' . v:exception . ' ' . v:throwpoint
+endfunction
+
 let s:executables = {}
 
 function! s:executable(binary) abort
