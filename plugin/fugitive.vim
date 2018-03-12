@@ -440,7 +440,13 @@ function! s:repo_git_chomp_in_tree(...) dict abort
 endfunction
 
 function! s:repo_rev_parse(rev) dict abort
-  let hash = self.git_chomp('rev-parse','--verify',a:rev)
+  try
+    let l:hash = ducttape#git#revparse(a:rev)[0]
+  catch
+    " NOTE that revisions like ':0:file' are currently unsupported by libgit2.
+    " wah-wah
+    let hash = self.git_chomp('rev-parse','--verify',a:rev)
+  endtry
   if hash =~ '\<\x\{40\}$'
     return matchstr(hash,'\<\x\{40\}$')
   endif
