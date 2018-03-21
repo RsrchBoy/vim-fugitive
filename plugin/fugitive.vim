@@ -469,7 +469,14 @@ function! s:repo_superglob(base) dict abort
     let results = []
     if a:base !~# '^/'
       let heads = ["HEAD","ORIG_HEAD","FETCH_HEAD","MERGE_HEAD"]
-      let heads += sort(split(s:repo().git_chomp("rev-parse","--symbolic","--branches","--tags","--remotes"),"\n"))
+      " XXX
+      try
+        let heads += ducttape#git#interesting_refs()
+        let b:dt_interesting_refs = 1
+      catch
+        call s:dtCatch('interesting_refs(), superglob()')
+        let heads += sort(split(s:repo().git_chomp("rev-parse","--symbolic","--branches","--tags","--remotes"),"\n"))
+      endtry
       " Add any stashes.
       if filereadable(s:repo().dir('refs/stash'))
         let heads += ["stash"]
@@ -1836,14 +1843,27 @@ function! s:buffer_compare_age(commit) dict abort
   elseif self.commit() ==# a:commit
     return 0
   endif
-  let base = self.repo().git_chomp('merge-base',self.commit(),a:commit)
+  try
+    let base = ducttape#git#merge_base(self.commit(), a:commit)
+    let b:dt_merge_base = base
+  catch
+    call s:dtCatch('merge_base: ' . self.commit() . ', ' . a:commit)
+    let base = self.repo().git_chomp('merge-base',self.commit(),a:commit)
+  endtry
   if base ==# self.commit()
     return -1
   elseif base ==# a:commit
     return 1
   endif
-  let my_time    = +self.repo().git_chomp('log','--max-count=1','--pretty=format:%at',self.commit())
-  let their_time = +self.repo().git_chomp('log','--max-count=1','--pretty=format:%at',a:commit)
+  try
+    let my_time    = ducttape#git#author_timestamp(self.commit())
+    let their_time = ducttape#git#author_timestamp(a:commit)
+    let b:dt_author_timestamp = 1
+  catch
+    call s:dtCatch('author_timestamp()')
+    let my_time    = +self.repo().git_chomp('log','--max-count=1','--pretty=format:%at',self.commit())
+    let their_time = +self.repo().git_chomp('log','--max-count=1','--pretty=format:%at',a:commit)
+  endtry
   return my_time < their_time ? -1 : my_time != their_time
 endfunction
 
@@ -2359,13 +2379,28 @@ function! s:Browse(bang,line1,count,...) abort
       let branch = s:repo().head()
     endif
     if !empty(branch)
-      let r = s:repo().git_chomp('config','branch.'.branch.'.remote')
-      let m = s:repo().git_chomp('config','branch.'.branch.'.merge')[11:-1]
+      try
+        let r = ducttape#git#config_str('branch.'.branch.'.remote')
+        let m = ducttape#git#config_str('branch.'.branch.'.merge')[11:-1]
+        let b:dt_browse_config = 1
+      catch
+        call s:dtCatch('config_str() in s:Browse()')
+        let r = s:repo().git_chomp('config','branch.'.branch.'.remote')
+        let m = s:repo().git_chomp('config','branch.'.branch.'.merge')[11:-1]
+      endtry
       if r ==# '.' && !empty(m)
-        let r2 = s:repo().git_chomp('config','branch.'.m.'.remote')
+        try
+          let r2 = ducttape#git#config_str('branch.'.m.'.remote')
+        catch
+          let r2 = s:repo().git_chomp('config','branch.'.m.'.remote')
+        endtry
         if r2 !~# '^\.\=$'
           let r = r2
-          let m = s:repo().git_chomp('config','branch.'.m.'.merge')[11:-1]
+          try
+            let m = ducttape#git#config_str('branch.'.m.'.merge')[11:-1]
+          catch
+            let m = s:repo().git_chomp('config','branch.'.m.'.merge')[11:-1]
+          endtry
         endif
       endif
       if empty(remote)
