@@ -69,7 +69,9 @@ function! s:shellslash(path) abort
 endfunction
 
 function! s:dtCatch(prepend) abort
-  echoerr a:prepend . ' / ' . v:exception . ' ' . v:throwpoint
+  " echoerr a:prepend . ' / ' . v:exception . ' ' . v:throwpoint
+  if !has_key(g:, 'dt_errors') | let g:dt_errors = [] | endif
+  let g:dt_errors += [ a:prepend . ' / ' . v:exception . ' ' . v:throwpoint ]
 endfunction
 
 let s:executables = {}
