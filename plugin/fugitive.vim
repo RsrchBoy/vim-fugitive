@@ -480,6 +480,7 @@ function! s:repo_superglob(base) dict abort
       " Add any stashes.
       if filereadable(s:repo().dir('refs/stash'))
         let heads += ["stash"]
+        " XXX
         let heads += sort(split(s:repo().git_chomp("stash","list","--pretty=format:%gd"),"\n"))
       endif
       call filter(heads,'v:val[ 0 : strlen(a:base)-1 ] ==# a:base')
@@ -1878,6 +1879,7 @@ function! s:Diff(vert,keepfocus,...) abort
   let vert = empty(a:vert) ? s:diff_modifier(2) : a:vert
   if exists(':DiffGitCached')
     return 'DiffGitCached'
+    " XXX
   elseif (empty(args) || args[0] == ':') && s:buffer().commit() =~# '^[0-1]\=$' && s:repo().git_chomp_in_tree('ls-files', '--unmerged', '--', s:buffer().path()) !=# ''
     let vert = empty(a:vert) ? s:diff_modifier(3) : a:vert
     let nr = bufnr('')
@@ -1912,6 +1914,7 @@ function! s:Diff(vert,keepfocus,...) abort
     else
       let file = s:buffer().expand(arg)
     endif
+    " XXX
     if file !~# ':' && file !~# '^/' && s:repo().git_chomp('cat-file','-t',file) =~# '^\%(tag\|commit\)$'
       let file = file.s:buffer().path(':')
     endif
@@ -2626,6 +2629,7 @@ function! s:BufReadIndex() abort
     else
       let cd = exists('*haslocaldir') && haslocaldir() ? 'lcd' : 'cd'
       let dir = getcwd()
+      " XXX here
       if fugitive#git_version() =~# '^0\|^1\.[1-7]\.'
         let cmd = s:repo().git_command('status')
       else
@@ -2692,8 +2696,24 @@ function! s:FileRead() abort
     if path =~ '^:'
       let type = 'blob'
     else
-      let type = repo.git_chomp('cat-file','-t',hash)
+      try
+        let l:type = ducttape#git#type_of(l:hash)
+      catch
+        call s:dtCatch(l:hash)
+        let l:type = repo.git_chomp('cat-file','-t',hash)
+      endtry
     endif
+    if l:type ==# 'blob'
+      try
+        let l:content = ducttape#git#blob_read_into_buf(l:hash)
+        let b:dt_fileread = 'blob_read'
+      catch
+        call s:dtCatch(l:hash)
+      endtry
+    else
+      echom 'huh: ' . l:type
+    endif
+    " XXX
     " TODO: use count, if possible
     return "read !".escape(repo.git_command('cat-file',type,hash),'%#\')
   catch /^fugitive:/
@@ -2706,7 +2726,13 @@ function! s:BufReadIndexFile() abort
     let b:fugitive_type = 'blob'
     let b:git_dir = s:repo().dir()
     try
-      call s:ReplaceCmd(s:repo().git_command('cat-file','blob',s:buffer().sha1()))
+      try
+        call ducttape#git#blob_read_into_buf(s:buffer().sha1())
+        let b:dt_index_read = 1
+      catch
+        call s:ReplaceCmd(s:repo().git_command('cat-file','blob',s:buffer().sha1()))
+        let b:dt_index_read = 0
+      endtry
     finally
       if &bufhidden ==# ''
         setlocal bufhidden=delete
@@ -2725,10 +2751,18 @@ endfunction
 function! s:BufWriteIndexFile() abort
   let tmp = tempname()
   try
+    " TODO here we could use bufrepo->index->add_frombuffer() to speed things
+    " up a bit
     let path = matchstr(expand('<amatch>'),'//\d/\zs.*')
     let stage = matchstr(expand('<amatch>'),'//\zs\d')
-    silent execute 'write !'.s:repo().git_command('hash-object','-w','--stdin').' > '.tmp
-    let sha1 = readfile(tmp)[0]
+    try
+      let sha1 = ducttape#git#curbuf_to_blob()
+      let b:dt_write_index_file = 1
+    catch
+      let b:dt_write_index_file = 0
+      silent execute 'write !'.s:repo().git_command('hash-object','-w','--stdin').' > '.tmp
+      let sha1 = readfile(tmp)[0]
+    endtry
     let old_mode = matchstr(s:repo().git_chomp('ls-files','--stage',path),'^\d\+')
     if old_mode == ''
       let old_mode = executable(s:repo().tree(path)) ? '100755' : '100644'
@@ -2795,30 +2829,53 @@ function! s:BufReadObject() abort
       elseif b:fugitive_type ==# 'tag'
         let b:fugitive_display_format = b:fugitive_display_format % 2
         if b:fugitive_display_format
-          call s:ReplaceCmd(s:repo().git_command('cat-file',b:fugitive_type,hash))
+          try
+            echom 'in taggie!'
+            let l:tag = ducttape#git#odb#read(l:hash)
+            silent %delete _
+            call append(0,l:tag.data)
+            let b:dt_bufreadobject = '...#obj#read(): ' . l:hash
+          catch
+            call s:dtCatch(l:hash)
+            call s:ReplaceCmd(s:repo().git_command('cat-file',b:fugitive_type,hash))
+          endtry
         else
+          echom 'in taggie2!'
           call s:ReplaceCmd(s:repo().git_command('cat-file','-p',hash))
         endif
       elseif b:fugitive_type ==# 'commit'
-        let b:fugitive_display_format = b:fugitive_display_format % 2
-        if b:fugitive_display_format
-          call s:ReplaceCmd(s:repo().git_command('cat-file',b:fugitive_type,hash))
-        else
-          call s:ReplaceCmd(s:repo().git_command('show','--no-color','--pretty=format:tree%x20%T%nparent%x20%P%nauthor%x20%an%x20<%ae>%x20%ad%ncommitter%x20%cn%x20<%ce>%x20%cd%nencoding%x20%e%n%n%s%n%n%b',hash))
-          keepjumps call search('^parent ')
-          if getline('.') ==# 'parent '
-            silent keepjumps delete_
+        let b:dt_fugitive_type_commit = 1
+        try
+          call ducttape#git#get_commit(l:hash)
+          let b:dt_bufreadobject = '...#get_commit(): ' . l:hash
+        catch
+          call s:dtCatch(l:hash)
+          let b:fugitive_display_format = b:fugitive_display_format % 2
+          if b:fugitive_display_format
+            call s:ReplaceCmd(s:repo().git_command('cat-file',b:fugitive_type,hash))
           else
-            silent keepjumps s/\%(^parent\)\@<! /\rparent /ge
+            call s:ReplaceCmd(s:repo().git_command('show','--no-color','--pretty=format:tree%x20%T%nparent%x20%P%nauthor%x20%an%x20<%ae>%x20%ad%ncommitter%x20%cn%x20<%ce>%x20%cd%nencoding%x20%e%n%n%s%n%n%b',hash))
+            keepjumps call search('^parent ')
+            if getline('.') ==# 'parent '
+              silent keepjumps delete_
+            else
+              silent keepjumps s/\%(^parent\)\@<! /\rparent /ge
+            endif
+            keepjumps let lnum = search('^encoding \%(<unknown>\)\=$','W',line('.')+3)
+            if lnum
+              silent keepjumps delete_
+            end
+            keepjumps 1
           endif
-          keepjumps let lnum = search('^encoding \%(<unknown>\)\=$','W',line('.')+3)
-          if lnum
-            silent keepjumps delete_
-          end
-          keepjumps 1
-        endif
+        endtry
       elseif b:fugitive_type ==# 'blob'
-        call s:ReplaceCmd(s:repo().git_command('cat-file',b:fugitive_type,hash))
+        try
+          call ducttape#git#blob_read_into_buf(l:hash)
+          let b:dt_bufreadobject = '...#blob_read(): ' . l:hash
+        catch
+          call s:dtCatch(l:hash)
+          call s:ReplaceCmd(s:repo().git_command('cat-file',b:fugitive_type,hash))
+        endtry
         setlocal nomodeline
       endif
     finally
@@ -3215,3 +3272,5 @@ augroup fugitive_foldtext
         \    set foldtext=fugitive#foldtext() |
         \ endif
 augroup END
+
+" vim: sw=2 :
